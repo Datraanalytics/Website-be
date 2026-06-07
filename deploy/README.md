@@ -21,7 +21,7 @@ site is deployed. The full stack (backend + static frontend) runs as a
 | Host            | `13.205.180.185`                                    |
 | SSH user        | `ubuntu`                                            |
 | App dir         | `/home/ubuntu/datra-analytics-final`                |
-| Compose         | `docker-compose` **v1** (use the hyphenated command)|
+| Compose         | Docker Compose **v2** plugin (`docker compose`)     |
 | Frontend ports  | `80`, `443`                                         |
 | Backend port    | `8000` (also proxied by the frontend nginx at `/api`)|
 
@@ -31,11 +31,11 @@ Two workflows, one per repo, both triggered on **push to `main`** only:
 
 - **Website-be** → `.github/workflows/deploy.yml`
   rsyncs this repo into `backend/`, pushes this `docker-compose.yml` to the
-  server, then `docker-compose up -d --build backend`, then health-checks
+  server, then `docker compose up -d --build backend`, then health-checks
   `http://localhost:8000/api/dashboard/filters`.
 - **Website-fe** → `.github/workflows/deploy.yml`
-  rsyncs that repo into `website/`, then `docker-compose up -d --build
-  frontend`, then health-checks `http://localhost/health`.
+  rsyncs that repo into `website/`, then `docker compose up -d --build
+  --no-deps frontend`, then health-checks `http://localhost/health`.
 
 ### Required GitHub Actions secrets (set per repo)
 
@@ -53,8 +53,8 @@ never overwritten by a deploy.
 From the server (`/home/ubuntu/datra-analytics-final`):
 
 ```bash
-docker-compose up -d --build          # rebuild & restart everything
-docker-compose up -d --build backend  # backend only
-docker-compose up -d --build frontend # frontend only
-docker-compose logs -f                # tail logs
+docker compose up -d --build           # rebuild & restart everything
+docker compose up -d --build backend   # backend only
+docker compose up -d --build frontend  # frontend only
+docker compose logs -f                 # tail logs
 ```
