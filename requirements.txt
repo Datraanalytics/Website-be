@@ -1,0 +1,10 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+sqlalchemy==2.0.25
+pymysql==1.1.0
+python-dotenv==1.0.0
+pydantic[email]==2.5.3
+pydantic-settings==2.1.0
+aiomysql==0.2.0
+asyncmy==0.2.9
+cryptography==42.0.0
