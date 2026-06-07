@@ -1,0 +1,79 @@
+name: Deploy Backend
+
+# Deploys the FastAPI backend to the EC2 instance on every push to main.
+# Runs ONLY on push to main (never on pull_request) so that fork PRs can
+# never access the deployment secrets.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Never run two deploys (backend or frontend) against the box at once.
+concurrency:
+  group: deploy-datra-analytics
+  cancel-in-progress: false
+
+env:
+  APP_DIR: /home/ubuntu/datra-analytics-final
+
+jobs:
+  deploy:
+    name: Rsync code & rebuild backend on EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync backend code -> server backend/
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'deploy' \
+            --exclude '.env' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${APP_DIR}/backend/"
+
+      - name: Sync docker-compose.yml (infra-as-code, single source of truth)
+        run: |
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            deploy/docker-compose.yml \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${APP_DIR}/docker-compose.yml"
+
+      - name: Rebuild & restart backend container
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd ${APP_DIR} && docker-compose up -d --build backend"
+
+      - name: Health check (/api/dashboard/filters)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd ${APP_DIR} && \
+             for i in \$(seq 1 30); do \
+               if curl -sf http://localhost:8000/api/dashboard/filters >/dev/null; then \
+                 echo 'Backend healthy'; exit 0; \
+               fi; \
+               echo \"waiting for backend... (\$i/30)\"; sleep 3; \
+             done; \
+             echo 'Health check FAILED - dumping last 60 log lines:'; \
+             docker-compose logs --tail=60 backend; exit 1"
+
+      - name: Prune dangling images
+        if: always()
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "docker image prune -f >/dev/null 2>&1 || true"
