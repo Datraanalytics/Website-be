@@ -7,10 +7,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    # Database
-    db_host: str = "127.0.0.1"
+    # Database — all values come from the environment / .env (no hardcoded target)
+    db_host: str = ""
     db_port: int = 3306
-    db_name: str = "Analytics"
+    db_name: str = ""
     db_user: str = ""
     db_password: str = ""
 
